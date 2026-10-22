@@ -10,6 +10,12 @@ const path = require('path');
 const fs = require('fs');
 const { WebSocketServer } = require('ws');
 const mqtt = require('mqtt');
+let mysql = null;
+try {
+  mysql = require('mysql2/promise');
+} catch (e) {
+  // mysql2 opsional jika dijalankan minimalis
+}
 
 const app = express();
 const server = http.createServer(app);
@@ -20,6 +26,16 @@ const MQTT_BROKER = process.env.MQTT_BROKER_URL || 'mqtt://localhost:1883';
 const MQTT_USER = process.env.MQTT_USER || 'nodered';
 const MQTT_PASS = process.env.MQTT_PASS || 'PASSWORD_NODE_RED';
 const DEFAULT_DEVICE_ID = process.env.DEFAULT_DEVICE_ID || 'device01';
+
+// Konfigurasi Database MySQL / MariaDB
+const DB_HOST = process.env.DB_HOST || '';
+const DB_PORT = parseInt(process.env.DB_PORT, 10) || 3306;
+const DB_USER = process.env.DB_USER || 'healthuser';
+const DB_PASSWORD = process.env.DB_PASSWORD || 'healthpass';
+const DB_NAME = process.env.DB_NAME || 'healthguard';
+
+let dbPool = null;
+let isDbConnected = false;
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -54,6 +70,122 @@ function saveDb() {
     fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2), 'utf8');
   } catch (e) {
     console.error('[!] Gagal menyimpan database:', e.message);
+  }
+}
+
+// Inisialisasi Database MySQL / MariaDB jika DB_HOST dikonfigurasi
+async function ensureTables() {
+  if (!dbPool) return;
+  try {
+    await dbPool.query(`
+      CREATE TABLE IF NOT EXISTS patients (
+        patient_id VARCHAR(64) PRIMARY KEY,
+        display_name VARCHAR(128) NOT NULL,
+        birth_year INT,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    await dbPool.query(`
+      CREATE TABLE IF NOT EXISTS sessions (
+        session_id VARCHAR(64) PRIMARY KEY,
+        patient_id VARCHAR(64) NOT NULL,
+        device_id VARCHAR(64) NOT NULL,
+        status ENUM('authorized','completed','cancelled','expired') NOT NULL,
+        started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        ended_at TIMESTAMP NULL,
+        FOREIGN KEY (patient_id) REFERENCES patients(patient_id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    await dbPool.query(`
+      CREATE TABLE IF NOT EXISTS measurements (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        session_id VARCHAR(64) NOT NULL,
+        patient_id VARCHAR(64) NOT NULL,
+        device_id VARCHAR(64) NOT NULL,
+        heart_rate_bpm INT NULL,
+        spo2_percent INT NULL,
+        finger_detected TINYINT(1) NOT NULL DEFAULT 0,
+        hr_valid TINYINT(1) NOT NULL DEFAULT 0,
+        spo2_valid TINYINT(1) NOT NULL DEFAULT 0,
+        measured_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (session_id) REFERENCES sessions(session_id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    await dbPool.query(`
+      INSERT INTO patients (patient_id, display_name, birth_year)
+      VALUES 
+        ('patient001', 'Pasien Demo 001', 1998),
+        ('patient002', 'Pasien Demo 002', 2001)
+      ON DUPLICATE KEY UPDATE display_name = VALUES(display_name);
+    `);
+    console.log('[+] Skema tabel MySQL/MariaDB siap.');
+  } catch (err) {
+    console.error('[!] Gagal memastikan struktur tabel database:', err.message);
+  }
+}
+
+async function syncPatientsFromDb() {
+  if (!dbPool || !isDbConnected) return;
+  try {
+    const [rows] = await dbPool.query('SELECT patient_id, display_name, birth_year, created_at FROM patients ORDER BY patient_id ASC');
+    if (rows && rows.length > 0) {
+      db.patients = rows.map(r => ({
+        patient_id: r.patient_id,
+        display_name: r.display_name,
+        birth_year: r.birth_year,
+        created_at: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString()
+      }));
+      saveDb();
+      console.log(`[+] Sinkronisasi ${rows.length} pasien dari MySQL berhasil.`);
+    }
+  } catch (err) {
+    console.warn('[!] Gagal menyinkronkan data pasien dari MySQL:', err.message);
+  }
+}
+
+async function initDatabase() {
+  if (!DB_HOST) {
+    console.log('[i] DB_HOST tidak diisi. Menggunakan penyimpanan file JSON lokal.');
+    return;
+  }
+  if (!mysql) {
+    console.warn('[!] Paket mysql2 tidak tersedia. Menggunakan penyimpanan lokal.');
+    return;
+  }
+
+  console.log(`[*] Menghubungkan ke Database MySQL/MariaDB di ${DB_HOST}:${DB_PORT}/${DB_NAME}...`);
+
+  const maxRetries = 20;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      dbPool = mysql.createPool({
+        host: DB_HOST,
+        port: DB_PORT,
+        user: DB_USER,
+        password: DB_PASSWORD,
+        database: DB_NAME,
+        waitForConnections: true,
+        connectionLimit: 10,
+        queueLimit: 0
+      });
+
+      await dbPool.query('SELECT 1');
+      isDbConnected = true;
+      console.log('[+] Berhasil terhubung ke database MySQL/MariaDB!');
+      await ensureTables();
+      await syncPatientsFromDb();
+      break;
+    } catch (err) {
+      console.warn(`[!] Percobaan koneksi database ke-${attempt}/${maxRetries} gagal: ${err.message}. Mencoba lagi dalam 3 detik...`);
+      if (attempt === maxRetries) {
+        console.error('[!] Gagal terhubung ke database setelah beberapa percobaan. Menggunakan penyimpanan lokal fallback.');
+      } else {
+        await new Promise(r => setTimeout(r, 3000));
+      }
+    }
   }
 }
 
@@ -171,6 +303,26 @@ function handleIncomingVitals(data) {
   if (data.finger_detected) {
     db.measurements.push(measurement);
     saveDb();
+
+    if (dbPool && isDbConnected) {
+      dbPool.query(
+        `INSERT INTO measurements (session_id, patient_id, device_id, heart_rate_bpm, spo2_percent, finger_detected, hr_valid, spo2_valid, measured_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          measurement.session_id,
+          measurement.patient_id,
+          measurement.device_id,
+          measurement.heart_rate_bpm,
+          measurement.spo2_percent,
+          measurement.finger_detected ? 1 : 0,
+          measurement.hr_valid ? 1 : 0,
+          measurement.spo2_valid ? 1 : 0,
+          new Date(measurement.measured_at)
+        ]
+      ).catch(err => {
+        console.error('[!] Gagal menyimpan measurement ke MySQL:', err.message);
+      });
+    }
   }
 
   // Siarkan ke dashboard frontend via WebSocket
@@ -255,7 +407,15 @@ function toggleSimulator(enable) {
 // REST API Endpoints
 
 // 1. Daftar Pasien (Sesuai schema.sql)
-app.get('/api/patients', (req, res) => {
+app.get('/api/patients', async (req, res) => {
+  if (dbPool && isDbConnected) {
+    try {
+      const [rows] = await dbPool.query('SELECT patient_id, display_name, birth_year, created_at FROM patients ORDER BY patient_id ASC');
+      return res.json({ success: true, patients: rows });
+    } catch (err) {
+      console.warn('[!] Gagal membaca data pasien dari MySQL, fallback ke lokal:', err.message);
+    }
+  }
   res.json({ success: true, patients: db.patients });
 });
 
@@ -265,7 +425,7 @@ app.get('/api/sessions/active', (req, res) => {
 });
 
 // 3. Mulai Sesi Baru (Authorize)
-app.post('/api/sessions/start', (req, res) => {
+app.post('/api/sessions/start', async (req, res) => {
   const { patient_id, device_id } = req.body;
   const targetDevice = device_id || DEFAULT_DEVICE_ID;
 
@@ -287,6 +447,19 @@ app.post('/api/sessions/start', (req, res) => {
   db.sessions.push(activeSession);
   saveDb();
 
+  // Simpan record sesi baru ke MySQL jika terhubung
+  if (dbPool && isDbConnected) {
+    try {
+      await dbPool.query(
+        `INSERT INTO sessions (session_id, patient_id, device_id, status, started_at)
+         VALUES (?, ?, ?, ?, ?)`,
+        [activeSession.session_id, activeSession.patient_id, activeSession.device_id, 'authorized', new Date(activeSession.started_at)]
+      );
+    } catch (err) {
+      console.error('[!] Gagal menyimpan sesi ke MySQL:', err.message);
+    }
+  }
+
   // Kirim perintah MQTT ke ESP32
   publishSessionCommand(targetDevice, 'authorized', sessionId, patient.patient_id);
 
@@ -295,7 +468,7 @@ app.post('/api/sessions/start', (req, res) => {
 });
 
 // 4. Hentikan Sesi
-app.post('/api/sessions/stop', (req, res) => {
+app.post('/api/sessions/stop', async (req, res) => {
   const { device_id } = req.body;
   const targetDevice = device_id || (activeSession ? activeSession.device_id : DEFAULT_DEVICE_ID);
 
@@ -303,6 +476,18 @@ app.post('/api/sessions/stop', (req, res) => {
     activeSession.status = 'completed';
     activeSession.ended_at = new Date().toISOString();
     saveDb();
+
+    // Update status sesi di MySQL jika terhubung
+    if (dbPool && isDbConnected) {
+      try {
+        await dbPool.query(
+          `UPDATE sessions SET status = 'completed', ended_at = ? WHERE session_id = ?`,
+          [new Date(activeSession.ended_at), activeSession.session_id]
+        );
+      } catch (err) {
+        console.error('[!] Gagal mengupdate status sesi di MySQL:', err.message);
+      }
+    }
   }
 
   publishSessionCommand(targetDevice, 'stop');
@@ -315,8 +500,37 @@ app.post('/api/sessions/stop', (req, res) => {
 });
 
 // 5. Riwayat Pengukuran
-app.get('/api/measurements', (req, res) => {
-  const limit = parseInt(req.query.limit) || 50;
+app.get('/api/measurements', async (req, res) => {
+  const limit = parseInt(req.query.limit, 10) || 50;
+
+  if (dbPool && isDbConnected) {
+    try {
+      const [rows] = await dbPool.query(
+        `SELECT id, session_id, patient_id, device_id, heart_rate_bpm, spo2_percent,
+                finger_detected, hr_valid, spo2_valid, measured_at
+         FROM measurements
+         ORDER BY id DESC
+         LIMIT ?`,
+        [limit]
+      );
+      const measurements = rows.map(r => ({
+        id: r.id,
+        session_id: r.session_id,
+        patient_id: r.patient_id,
+        device_id: r.device_id,
+        heart_rate_bpm: r.heart_rate_bpm,
+        spo2_percent: r.spo2_percent,
+        finger_detected: Boolean(r.finger_detected),
+        hr_valid: Boolean(r.hr_valid),
+        spo2_valid: Boolean(r.spo2_valid),
+        measured_at: r.measured_at ? new Date(r.measured_at).toISOString() : new Date().toISOString()
+      }));
+      return res.json({ success: true, count: measurements.length, measurements });
+    } catch (err) {
+      console.warn('[!] Gagal query measurements dari MySQL, fallback ke lokal:', err.message);
+    }
+  }
+
   const list = db.measurements.slice(-limit).reverse();
   res.json({ success: true, count: list.length, measurements: list });
 });
@@ -342,10 +556,11 @@ wss.on('connection', (ws) => {
 });
 
 // Jalankan Server
-server.listen(PORT, () => {
+server.listen(PORT, async () => {
   console.log('================================================================');
   console.log(`[+] HealthGuard IoT Dashboard berjalan di http://localhost:${PORT}`);
   console.log(`[+] WebSocket Server aktif di ws://localhost:${PORT}/ws`);
   console.log('================================================================');
   initMqtt();
+  await initDatabase();
 });

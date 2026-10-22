@@ -1,0 +1,78 @@
+services:
+  # 1. Broker MQTT (Mosquitto)
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: health-mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/config:/mosquitto/config:ro
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_log:/mosquitto/log
+    networks:
+      - health-net
+
+  # 2. Database Penyimpanan (MariaDB / MySQL)
+  database:
+    image: mariadb:11
+    container_name: health-mariadb
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: healthguard
+      MYSQL_USER: healthuser
+      MYSQL_PASSWORD: healthpass
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mariadb-admin ping -h 127.0.0.1 -u healthuser --password=healthpass || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - health-net
+
+  # 3. Aplikasi Web Dashboard HealthGuard
+  app:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+    container_name: health-dashboard
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      MQTT_BROKER_URL: mqtt://mosquitto:1883
+      MQTT_USER: nodered
+      MQTT_PASS: PASSWORD_NODE_RED
+      DEFAULT_DEVICE_ID: device01
+      DB_HOST: database
+      DB_PORT: 3306
+      DB_USER: healthuser
+      DB_PASSWORD: healthpass
+      DB_NAME: healthguard
+    volumes:
+      - app_data:/app/data
+    depends_on:
+      mosquitto:
+        condition: service_started
+      database:
+        condition: service_healthy
+    networks:
+      - health-net
+
+networks:
+  health-net:
+    driver: bridge
+
+volumes:
+  mosquitto_data:
+  mosquitto_log:
+  db_data:
+  app_data:
