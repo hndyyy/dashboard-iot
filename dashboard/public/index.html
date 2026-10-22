@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IoT Health Monitor — ESP32 + MAX30102 Dashboard</title>
+  <!-- Chart.js untuk grafik real-time -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header Utama -->
+    <header class="app-header">
+      <div class="brand">
+        <div class="brand-icon"><i class="fa-solid fa-heart-pulse"></i></div>
+        <div class="brand-text">
+          <h1>IoT Health Monitor</h1>
+          <p>ESP32 + MAX30102 Medical Telemetry System</p>
+        </div>
+      </div>
+
+      <div class="header-status">
+        <!-- Status Koneksi MQTT -->
+        <div class="status-pill" id="mqtt-status-pill">
+          <span class="status-dot disconnected" id="mqtt-dot"></span>
+          <span>MQTT: <strong id="mqtt-text">Menghubungkan...</strong></span>
+        </div>
+
+        <!-- Status Perangkat ESP32 -->
+        <div class="status-pill" id="device-status-pill">
+          <span class="status-dot offline" id="device-dot"></span>
+          <span>ESP32: <strong id="device-text">Menunggu Data</strong></span>
+        </div>
+
+        <!-- Sakelar Simulator ESP32 -->
+        <div class="simulator-control">
+          <label class="switch-label">
+            <span class="label-text"><i class="fa-solid fa-microchip"></i> Simulator ESP32</span>
+            <label class="switch">
+              <input type="checkbox" id="simulator-toggle">
+              <span class="slider round"></span>
+            </label>
+          </label>
+        </div>
+      </div>
+    </header>
+
+    <!-- Kontrol Sesi & Pasien -->
+    <section class="session-section">
+      <div class="card session-card">
+        <div class="card-header">
+          <h2><i class="fa-solid fa-user-doctor"></i> Manajemen Sesi Pemeriksaan Pasien</h2>
+          <span class="badge" id="session-badge">TIDAK ADA SESI AKTIF</span>
+        </div>
+        <div class="card-body session-grid">
+          <div class="form-group">
+            <label for="patient-select"><i class="fa-solid fa-user"></i> Pilih Pasien:</label>
+            <select id="patient-select">
+              <option value="patient001">patient001 — Pasien Demo 001 (Lahir: 1998)</option>
+              <option value="patient002">patient002 — Pasien Demo 002 (Lahir: 2001)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="device-id-input"><i class="fa-solid fa-tower-broadcast"></i> Target Device ID:</label>
+            <input type="text" id="device-id-input" value="device01" placeholder="device01">
+          </div>
+
+          <div class="session-actions">
+            <button id="btn-start-session" class="btn btn-primary">
+              <i class="fa-solid fa-play"></i> Mulai Sesi (Otorisasi)
+            </button>
+            <button id="btn-stop-session" class="btn btn-danger" disabled>
+              <i class="fa-solid fa-stop"></i> Hentikan Sesi
+            </button>
+          </div>
+        </div>
+
+        <!-- Detail Banner Sesi Aktif -->
+        <div class="session-info-banner" id="session-info-banner">
+          <div class="info-item">
+            <span class="info-label">ID Sesi Aktif:</span>
+            <code class="info-value" id="current-session-id">-</code>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Pasien:</span>
+            <span class="info-value" id="current-patient-name">-</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Durasi Sesi:</span>
+            <span class="info-value" id="session-timer">00:00</span>
+          </div>
+          <div class="info-item status-detail-item">
+            <span class="info-label">Pesan Status ESP32:</span>
+            <span class="info-value highlight" id="esp32-detail-msg">Menunggu otorisasi sesi...</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Grid Telemetri Utama -->
+    <main class="telemetry-grid">
+      <!-- Kartu Heart Rate (BPM) -->
+      <div class="card metric-card hr-card">
+        <div class="metric-header">
+          <div class="metric-title">
+            <i class="fa-solid fa-heart pulse-icon"></i>
+            <h3>Denyut Nadi (Heart Rate)</h3>
+          </div>
+          <span class="validity-badge" id="hr-valid-badge">Menunggu</span>
+        </div>
+        <div class="metric-body">
+          <div class="metric-value-container">
+            <span class="metric-number" id="hr-value">--</span>
+            <span class="metric-unit">BPM</span>
+          </div>
+          <div class="metric-status" id="hr-status-label">Standar Normal: 60 – 100 BPM</div>
+          <div class="metric-meter">
+            <div class="meter-bar hr-bar" id="hr-bar" style="width: 0%;"></div>
+          </div>
+          <div class="metric-footer">
+            <span>Min: <strong id="hr-min">--</strong></span>
+            <span>Rata-rata: <strong id="hr-avg">--</strong></span>
+            <span>Maks: <strong id="hr-max">--</strong></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Kartu Saturasi Oksigen (SpO2) -->
+      <div class="card metric-card spo2-card">
+        <div class="metric-header">
+          <div class="metric-title">
+            <i class="fa-solid fa-lungs"></i>
+            <h3>Saturasi Oksigen (SpO2)</h3>
+          </div>
+          <span class="validity-badge" id="spo2-valid-badge">Menunggu</span>
+        </div>
+        <div class="metric-body">
+          <div class="metric-value-container">
+            <span class="metric-number" id="spo2-value">--</span>
+            <span class="metric-unit">%</span>
+          </div>
+          <div class="metric-status" id="spo2-status-label">Standar Normal: &ge; 95%</div>
+          <div class="metric-meter">
+            <div class="meter-bar spo2-bar" id="spo2-bar" style="width: 0%;"></div>
+          </div>
+          <div class="metric-footer">
+            <span>Min: <strong id="spo2-min">--</strong></span>
+            <span>Rata-rata: <strong id="spo2-avg">--</strong></span>
+            <span>Maks: <strong id="spo2-max">--</strong></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Kartu Sensor MAX30102 & Diagnostik -->
+      <div class="card sensor-card">
+        <div class="metric-header">
+          <div class="metric-title">
+            <i class="fa-solid fa-hand-pointer"></i>
+            <h3>Status Sensor MAX30102</h3>
+          </div>
+          <span class="sensor-tag" id="finger-tag">JARI BELUM TERDETEKSI</span>
+        </div>
+        <div class="sensor-body">
+          <div class="sensor-icon-wrapper" id="finger-icon-wrapper">
+            <i class="fa-solid fa-hand-holding-medical" id="finger-icon"></i>
+          </div>
+          <div class="sensor-info-text">
+            <h4 id="finger-status-title">Silakan Letakkan Jari</h4>
+            <p id="finger-status-desc">Sensor optik MAX30102 membutuhkan kontak stabil pada sensor infra merah dan lampu merah untuk menghitung SpO2 dan denyut nadi.</p>
+          </div>
+          <div class="diagnostics-list">
+            <div class="diag-item">
+              <span>Topik MQTT Telemetri:</span>
+              <code>health/+/vitals</code>
+            </div>
+            <div class="diag-item">
+              <span>Paket Terakhir Diterima:</span>
+              <strong id="last-packet-time">-</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Grafik Tren Real-Time -->
+    <section class="chart-section">
+      <div class="card chart-card">
+        <div class="card-header">
+          <h2><i class="fa-solid fa-chart-line"></i> Grafik Tren Real-Time (BPM & SpO2)</h2>
+          <div class="chart-controls">
+            <button class="btn btn-outline" id="btn-clear-chart"><i class="fa-solid fa-rotate-left"></i> Bersihkan Grafik</button>
+          </div>
+        </div>
+        <div class="card-body chart-wrapper">
+          <canvas id="vitalsChart"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tabel Riwayat Pengukuran (SQLite Integration) -->
+    <section class="history-section">
+      <div class="card history-card">
+        <div class="card-header">
+          <h2><i class="fa-solid fa-database"></i> Riwayat Pengukuran Database (Tabel <code>measurements</code>)</h2>
+          <div class="table-actions">
+            <button class="btn btn-outline" id="btn-refresh-history"><i class="fa-solid fa-arrows-rotate"></i> Muat Ulang</button>
+            <button class="btn btn-outline" id="btn-export-csv"><i class="fa-solid fa-file-csv"></i> Unduh CSV</button>
+          </div>
+        </div>
+        <div class="card-body table-responsive">
+          <table class="data-table" id="history-table">
+            <thead>
+              <tr>
+                <th>Waktu</th>
+                <th>ID Sesi</th>
+                <th>ID Pasien</th>
+                <th>Heart Rate</th>
+                <th>SpO2</th>
+                <th>Sensor Jari</th>
+                <th>Validitas Data</th>
+              </tr>
+            </thead>
+            <tbody id="history-tbody">
+              <tr>
+                <td colspan="7" class="text-center text-muted">Menunggu rekaman pengukuran dari ESP32...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <p>HealthGuard IoT Dashboard &bull; ESP32 Firmware: <code>health_monitor.ino</code> &bull; MQTT: <code>health/device01/#</code> &bull; Database: SQLite3</p>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

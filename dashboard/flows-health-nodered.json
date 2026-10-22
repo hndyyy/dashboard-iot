@@ -1,0 +1,617 @@
+[
+  {
+    "id": "tab_health_dashboard",
+    "type": "tab",
+    "label": "IoT Health Dashboard",
+    "disabled": false,
+    "info": "Dashboard Pemantauan Kesehatan IoT (ESP32 + MAX30102 + Mosquitto + SQLite). Termasuk kontrol sesi, live telemetry BPM/SpO2, riwayat, dan simulator."
+  },
+  {
+    "id": "ui_base_health",
+    "type": "ui_base",
+    "theme": {
+      "name": "theme-custom-dark",
+      "darkTheme": {
+        "default": "#0f1117",
+        "baseColor": "#22d3ee",
+        "baseFont": "Segoe UI, sans-serif"
+      },
+      "themeState": {
+        "base-color": {
+          "value": "#22d3ee",
+          "edited": true
+        },
+        "page-titlebar-backgroundColor": {
+          "value": "#0f1117",
+          "edited": true
+        },
+        "page-backgroundColor": {
+          "value": "#0f1117",
+          "edited": true
+        },
+        "page-sidebar-backgroundColor": {
+          "value": "#1a1d27",
+          "edited": true
+        },
+        "group-textColor": {
+          "value": "#22d3ee",
+          "edited": true
+        },
+        "group-borderColor": {
+          "value": "#2a2e3d",
+          "edited": true
+        },
+        "group-backgroundColor": {
+          "value": "#1a1d27",
+          "edited": true
+        },
+        "widget-textColor": {
+          "value": "#e6e8ee",
+          "edited": true
+        },
+        "widget-backgroundColor": {
+          "value": "#222634",
+          "edited": true
+        },
+        "widget-borderColor": {
+          "value": "#2a2e3d",
+          "edited": true
+        }
+      }
+    },
+    "site": {
+      "name": "Health IoT Monitor",
+      "hideToolbar": "false",
+      "allowSwipe": "false",
+      "dateFormat": "DD/MM/YYYY"
+    }
+  },
+  {
+    "id": "ui_tab_health_monitor",
+    "type": "ui_tab",
+    "name": "Pemantau Pasien",
+    "icon": "favorite",
+    "order": 1,
+    "disabled": false,
+    "hidden": false
+  },
+  {
+    "id": "ui_grp_session_ctrl",
+    "type": "ui_group",
+    "name": "Kontrol Sesi & Pasien",
+    "tab": "ui_tab_health_monitor",
+    "order": 1,
+    "disp": true,
+    "width": "6",
+    "collapse": false
+  },
+  {
+    "id": "ui_grp_device_status",
+    "type": "ui_group",
+    "name": "Status Perangkat & Sensor",
+    "tab": "ui_tab_health_monitor",
+    "order": 2,
+    "disp": true,
+    "width": "6",
+    "collapse": false
+  },
+  {
+    "id": "ui_grp_vitals_gauges",
+    "type": "ui_group",
+    "name": "Telemetri Vital (BPM & SpO2)",
+    "tab": "ui_tab_health_monitor",
+    "order": 3,
+    "disp": true,
+    "width": "6",
+    "collapse": false
+  },
+  {
+    "id": "ui_grp_vitals_charts",
+    "type": "ui_group",
+    "name": "Grafik Tren Real-Time",
+    "tab": "ui_tab_health_monitor",
+    "order": 4,
+    "disp": true,
+    "width": "6",
+    "collapse": false
+  },
+  {
+    "id": "ui_grp_history_table",
+    "type": "ui_group",
+    "name": "Riwayat Pengukuran Sesi Aktif",
+    "tab": "ui_tab_health_monitor",
+    "order": 5,
+    "disp": true,
+    "width": "12",
+    "collapse": false
+  },
+  {
+    "id": "mqtt_broker_health",
+    "type": "mqtt-broker",
+    "name": "Mosquitto Broker",
+    "broker": "mosquitto",
+    "port": "1883",
+    "clientid": "nodered-health-dashboard",
+    "autoConnect": true,
+    "usetls": false,
+    "protocolVersion": "4",
+    "keepalive": "60",
+    "cleansession": true,
+    "autoUnsubscribe": true,
+    "birthTopic": "",
+    "closeTopic": "",
+    "willTopic": ""
+  },
+  {
+    "id": "ui_css_health",
+    "type": "ui_template",
+    "z": "tab_health_dashboard",
+    "group": "ui_grp_session_ctrl",
+    "name": "CSS Dark Theme",
+    "order": 1,
+    "width": 0,
+    "height": 0,
+    "format": "<style>\nbody { background-color: #0f1117 !important; color: #e6e8ee !important; font-family: 'Segoe UI', Roboto, sans-serif !important; }\n.nr-dashboard-theme { background-color: #0f1117 !important; }\nmd-card { background-color: #1a1d27 !important; border: 1px solid #2a2e3d !important; border-radius: 8px !important; }\n.kpi-box { display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #131620; border-radius: 6px; border: 1px solid #2a2e3d; margin-bottom: 8px; }\n.badge-active { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; border: 1px solid #10b981; padding: 3px 8px; border-radius: 4px; font-weight: bold; }\n.badge-inactive { background: rgba(239, 68, 68, 0.2); color: #fca5a5; border: 1px solid #ef4444; padding: 3px 8px; border-radius: 4px; font-weight: bold; }\n.badge-finger-yes { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; border: 1px solid #10b981; padding: 4px 10px; border-radius: 4px; font-weight: bold; }\n.badge-finger-no { background: rgba(245, 158, 11, 0.2); color: #fde68a; border: 1px solid #f59e0b; padding: 4px 10px; border-radius: 4px; font-weight: bold; }\ntable.history-tbl { width: 100%; border-collapse: collapse; font-size: 0.85rem; }\ntable.history-tbl th { background: #131620; color: #22d3ee; padding: 8px 12px; border-bottom: 2px solid #2a2e3d; text-align: left; }\ntable.history-tbl td { padding: 8px 12px; border-bottom: 1px solid #1e2230; }\ntable.history-tbl tr:hover td { background: rgba(34, 211, 238, 0.05); }\n</style>",
+    "storeOutMessages": false,
+    "fwdInMessages": false,
+    "resendOnRefresh": true,
+    "templateScope": "global",
+    "x": 160,
+    "y": 60,
+    "wires": [
+      []
+    ]
+  },
+  {
+    "id": "ui_dropdown_patient",
+    "type": "ui_dropdown",
+    "z": "tab_health_dashboard",
+    "name": "Pilih Pasien",
+    "label": "Pasien",
+    "tooltip": "Pilih pasien untuk memulai sesi pemeriksaan",
+    "place": "Pilih Pasien",
+    "group": "ui_grp_session_ctrl",
+    "order": 2,
+    "width": 6,
+    "height": 1,
+    "passthru": true,
+    "multiple": false,
+    "options": [
+      {
+        "label": "Pasien Demo 001 (Lahir: 1998)",
+        "value": "patient001",
+        "type": "str"
+      },
+      {
+        "label": "Pasien Demo 002 (Lahir: 2001)",
+        "value": "patient002",
+        "type": "str"
+      }
+    ],
+    "payload": "",
+    "topic": "patient_select",
+    "topicType": "str",
+    "x": 170,
+    "y": 140,
+    "wires": [
+      [
+        "fn_set_selected_patient"
+      ]
+    ]
+  },
+  {
+    "id": "fn_set_selected_patient",
+    "type": "function",
+    "z": "tab_health_dashboard",
+    "name": "Simpan Pasien Terpilih",
+    "func": "flow.set('selected_patient', msg.payload || 'patient001');\nnode.status({fill: \"blue\", shape: \"dot\", text: \"Pasien dipilih: \" + (msg.payload || 'patient001')});\nreturn null;\n",
+    "outputs": 0,
+    "noerr": 0,
+    "x": 420,
+    "y": 140,
+    "wires": []
+  },
+  {
+    "id": "ui_btn_start_session",
+    "type": "ui_button",
+    "z": "tab_health_dashboard",
+    "name": "Mulai Sesi",
+    "label": "Mulai Sesi Pemeriksaan",
+    "group": "ui_grp_session_ctrl",
+    "order": 3,
+    "width": 3,
+    "height": 1,
+    "passthru": false,
+    "tooltip": "Otorisasi sesi baru ke ESP32",
+    "color": "#ffffff",
+    "bgcolor": "#10b981",
+    "icon": "play_arrow",
+    "payload": "start",
+    "payloadType": "str",
+    "topic": "session_control",
+    "x": 170,
+    "y": 200,
+    "wires": [
+      [
+        "fn_start_session"
+      ]
+    ]
+  },
+  {
+    "id": "ui_btn_stop_session",
+    "type": "ui_button",
+    "z": "tab_health_dashboard",
+    "name": "Hentikan Sesi",
+    "label": "Hentikan Sesi",
+    "group": "ui_grp_session_ctrl",
+    "order": 4,
+    "width": 3,
+    "height": 1,
+    "passthru": false,
+    "tooltip": "Hentikan sesi aktif pada ESP32",
+    "color": "#ffffff",
+    "bgcolor": "#ef4444",
+    "icon": "stop",
+    "payload": "stop",
+    "payloadType": "str",
+    "topic": "session_control",
+    "x": 170,
+    "y": 260,
+    "wires": [
+      [
+        "fn_stop_session"
+      ]
+    ]
+  },
+  {
+    "id": "fn_start_session",
+    "type": "function",
+    "z": "tab_health_dashboard",
+    "name": "Otorisasi Sesi Baru",
+    "func": "let patientId = flow.get('selected_patient') || 'patient001';\nlet sessionId = 'session-' + Date.now();\nlet deviceId = env.get('HEALTH_DEVICE_ID') || flow.get('HEALTH_DEVICE_ID') || 'device01';\n\nlet sessionData = {\n    status: 'authorized',\n    session_id: sessionId,\n    patient_id: patientId,\n    device_id: deviceId,\n    started_at: new Date().toISOString()\n};\n\n// Simpan di context sebagai sesi aktif\nflow.set('active_session', sessionData);\nflow.set('session_measurements', []); // Reset rekaman sesi\n\nnode.status({fill: \"green\", shape: \"dot\", text: \"Sesi aktif: \" + sessionId});\n\n// 1. Kirim MQTT otorisasi ke topik ESP32\nlet mqttMsg = {\n    topic: 'health/' + deviceId + '/session',\n    payload: JSON.stringify({\n        status: 'authorized',\n        session_id: sessionId,\n        patient_id: patientId\n    })\n};\n\n// 2. Kirim update status ke UI\nlet uiMsg = {\n    payload: {\n        active: true,\n        session_id: sessionId,\n        patient_id: patientId,\n        started_at: sessionData.started_at,\n        message: 'Sesi Aktif: Silakan letakkan jari pada sensor MAX30102'\n    }\n};\n\nreturn [mqttMsg, uiMsg];\n",
+    "outputs": 2,
+    "noerr": 0,
+    "x": 420,
+    "y": 200,
+    "wires": [
+      [
+        "mqtt_out_session"
+      ],
+      [
+        "ui_tpl_session_info",
+        "fn_update_device_card"
+      ]
+    ]
+  },
+  {
+    "id": "fn_stop_session",
+    "type": "function",
+    "z": "tab_health_dashboard",
+    "name": "Hentikan Sesi Aktif",
+    "func": "let deviceId = env.get('HEALTH_DEVICE_ID') || flow.get('HEALTH_DEVICE_ID') || 'device01';\nlet activeSession = flow.get('active_session');\n\nflow.set('active_session', null);\nnode.status({fill: \"red\", shape: \"ring\", text: \"Sesi dihentikan\"});\n\n// 1. Kirim MQTT stop ke ESP32\nlet mqttMsg = {\n    topic: 'health/' + deviceId + '/session',\n    payload: JSON.stringify({ status: 'stop' })\n};\n\n// 2. Kirim update status ke UI\nlet uiMsg = {\n    payload: {\n        active: false,\n        session_id: activeSession ? activeSession.session_id : '-',\n        patient_id: activeSession ? activeSession.patient_id : '-',\n        ended_at: new Date().toISOString(),\n        message: 'Sesi Pemeriksaan Telah Dihentikan'\n    }\n};\n\nreturn [mqttMsg, uiMsg];\n",
+    "outputs": 2,
+    "noerr": 0,
+    "x": 420,
+    "y": 260,
+    "wires": [
+      [
+        "mqtt_out_session"
+      ],
+      [
+        "ui_tpl_session_info",
+        "fn_update_device_card"
+      ]
+    ]
+  },
+  {
+    "id": "mqtt_out_session",
+    "type": "mqtt out",
+    "z": "tab_health_dashboard",
+    "name": "Publikasi Sesi ke MQTT",
+    "topic": "",
+    "qos": "1",
+    "retain": "false",
+    "respTopic": "",
+    "contentType": "",
+    "userProps": "",
+    "correl": "",
+    "expiry": "",
+    "broker": "mqtt_broker_health",
+    "x": 720,
+    "y": 200,
+    "wires": []
+  },
+  {
+    "id": "ui_tpl_session_info",
+    "type": "ui_template",
+    "z": "tab_health_dashboard",
+    "group": "ui_grp_session_ctrl",
+    "name": "Info Sesi Aktif",
+    "order": 5,
+    "width": 6,
+    "height": 3,
+    "format": "<div class=\"kpi-box\">\n  <div>\n    <div style=\"font-size: 0.78rem; text-transform: uppercase; color: #94a3b8; font-weight: 600;\">Status Sesi</div>\n    <div style=\"font-size: 1.15rem; font-weight: bold; margin-top: 4px; color: #ffffff;\">\n      {{msg.payload.session_id || 'Tidak Ada Sesi Aktif'}}\n    </div>\n    <div style=\"font-size: 0.8rem; color: #cbd5e1; margin-top: 2px;\">\n      Pasien: <b style=\"color: #22d3ee;\">{{msg.payload.patient_id || '-'}}</b>\n    </div>\n  </div>\n  <div>\n    <span ng-if=\"msg.payload.active\" class=\"badge-active\">SESI AKTIF</span>\n    <span ng-if=\"!msg.payload.active\" class=\"badge-inactive\">TIDAK AKTIF</span>\n  </div>\n</div>\n<div style=\"font-size: 0.82rem; color: #94a3b8; padding: 4px 6px;\">\n  Pesan: {{msg.payload.message || 'Pilih pasien dan klik Mulai Sesi Pemeriksaan'}}\n</div>",
+    "storeOutMessages": true,
+    "fwdInMessages": true,
+    "resendOnRefresh": true,
+    "templateScope": "local",
+    "x": 720,
+    "y": 260,
+    "wires": [
+      []
+    ]
+  },
+  {
+    "id": "mqtt_in_vitals",
+    "type": "mqtt in",
+    "z": "tab_health_dashboard",
+    "name": "MQTT In (health/+/vitals)",
+    "topic": "health/+/vitals",
+    "qos": "1",
+    "datatype": "auto-detect",
+    "broker": "mqtt_broker_health",
+    "nl": false,
+    "rap": true,
+    "rh": 0,
+    "inputs": 0,
+    "x": 180,
+    "y": 380,
+    "wires": [
+      [
+        "fn_validate_and_process_vitals"
+      ]
+    ]
+  },
+  {
+    "id": "mqtt_in_status",
+    "type": "mqtt in",
+    "z": "tab_health_dashboard",
+    "name": "MQTT In (health/+/status)",
+    "topic": "health/+/status",
+    "qos": "1",
+    "datatype": "auto-detect",
+    "broker": "mqtt_broker_health",
+    "nl": false,
+    "rap": true,
+    "rh": 0,
+    "inputs": 0,
+    "x": 180,
+    "y": 440,
+    "wires": [
+      [
+        "fn_handle_device_status"
+      ]
+    ]
+  },
+  {
+    "id": "inj_simulator_vitals",
+    "type": "inject",
+    "z": "tab_health_dashboard",
+    "name": "Simulasi Telemetri ESP32 (Tiap 3 Detik)",
+    "props": [
+      {
+        "p": "payload"
+      }
+    ],
+    "repeat": "3",
+    "crontab": "",
+    "once": false,
+    "topic": "simulation",
+    "payload": "",
+    "payloadType": "date",
+    "x": 230,
+    "y": 500,
+    "wires": [
+      [
+        "fn_sim_vitals"
+      ]
+    ]
+  },
+  {
+    "id": "fn_sim_vitals",
+    "type": "function",
+    "z": "tab_health_dashboard",
+    "name": "Generator Data Sensor Realistis",
+    "func": "let active = flow.get('active_session');\nif (!active) {\n    // Buat dummy sesi jika belum ada\n    active = {\n        session_id: 'session-demo-sim',\n        patient_id: 'patient001',\n        device_id: 'device01'\n    };\n    flow.set('active_session', active);\n}\n\n// Simulasi variasi denyut jantung 70-85 BPM dan SpO2 96-99%\nlet hr = Math.floor(Math.random() * (85 - 72 + 1)) + 72;\nlet spo2 = Math.floor(Math.random() * (99 - 96 + 1)) + 96;\n\nmsg.payload = {\n    device_id: active.device_id || 'device01',\n    patient_id: active.patient_id || 'patient001',\n    session_id: active.session_id,\n    finger_detected: true,\n    heart_rate_bpm: hr,\n    spo2_percent: spo2,\n    hr_valid: true,\n    spo2_valid: true,\n    timestamp_ms: Date.now()\n};\nreturn msg;\n",
+    "outputs": 1,
+    "noerr": 0,
+    "x": 510,
+    "y": 500,
+    "wires": [
+      [
+        "fn_validate_and_process_vitals"
+      ]
+    ]
+  },
+  {
+    "id": "fn_validate_and_process_vitals",
+    "type": "function",
+    "z": "tab_health_dashboard",
+    "name": "Validasi Sesi & Olah Telemetri",
+    "func": "let d = msg.payload;\nif (typeof d === 'string') {\n    try { d = JSON.parse(d); } catch(e) { return null; }\n}\n\nif (!d || !d.session_id || !d.device_id) {\n    node.status({fill: \"yellow\", shape: \"ring\", text: \"Data diabaikan: session_id/device_id kosong\"});\n    return null;\n}\n\nlet active = flow.get('active_session');\n\n// Validasi Sesi: Pastikan sesi aktif di database/backend cocok\nif (!active || active.session_id !== d.session_id) {\n    node.status({fill: \"yellow\", shape: \"ring\", text: \"Sesi tidak terdaftar/kadaluarsa\"});\n    return null;\n}\n\n// Gunakan patient_id dari sesi terdaftar (bukan mempercayai mentah payload)\nlet patientId = active.patient_id;\nlet hr = (d.hr_valid && d.heart_rate_bpm > 0) ? d.heart_rate_bpm : null;\nlet spo2 = (d.spo2_valid && d.spo2_percent > 0) ? d.spo2_percent : null;\nlet finger = d.finger_detected ? true : false;\nlet nowStr = new Date().toLocaleTimeString('id-ID');\n\n// Simpan rekaman pengukuran ke context history (memenuhi SQLite requirements)\nlet records = flow.get('session_measurements') || [];\nlet newRec = {\n    id: records.length + 1,\n    time: nowStr,\n    session_id: d.session_id,\n    patient_id: patientId,\n    heart_rate: hr || 0,\n    spo2: spo2 || 0,\n    finger: finger\n};\nrecords.unshift(newRec);\nif (records.length > 50) records.pop();\nflow.set('session_measurements', records);\n\nnode.status({fill: \"green\", shape: \"dot\", text: \"BPM: \" + (hr || '-') + \" | SpO2: \" + (spo2 || '-') + \"%\"});\n\n// 1. Output BPM Gauge\nlet msgHr = { payload: hr || 0 };\n\n// 2. Output SpO2 Gauge\nlet msgSpo2 = { payload: spo2 || 0 };\n\n// 3. Output Status Device / Finger\nlet msgStatus = {\n    payload: {\n        device_id: d.device_id,\n        finger_detected: finger,\n        hr_valid: d.hr_valid,\n        spo2_valid: d.spo2_valid,\n        last_seen: nowStr\n    }\n};\n\n// 4. Output Chart Vitals (multi-series)\nlet msgChartHr = { payload: hr || 0, topic: \"Denyut Nadi (BPM)\" };\nlet msgChartSpo2 = { payload: spo2 || 0, topic: \"Saturasi Oksigen (%)\" };\n\n// 5. Output History Table HTML\nlet rowsHtml = \"\";\nrecords.slice(0, 10).forEach(r => {\n    let hrColor = (r.heart_rate >= 60 && r.heart_rate <= 100) ? \"#10b981\" : \"#f59e0b\";\n    let spo2Color = (r.spo2 >= 95) ? \"#10b981\" : (r.spo2 >= 90 ? \"#f59e0b\" : \"#ef4444\");\n    rowsHtml += `<tr>\n      <td>` + r.time + `</td>\n      <td><code>` + r.session_id.substring(0, 16) + `...</code></td>\n      <td><b>` + r.patient_id + `</b></td>\n      <td style=\"color: ` + hrColor + `; font-weight: bold;\">` + r.heart_rate + ` BPM</td>\n      <td style=\"color: ` + spo2Color + `; font-weight: bold;\">` + r.spo2 + ` %</td>\n      <td>` + (r.finger ? '<span class=\"badge-finger-yes\">Terdeteksi</span>' : '<span class=\"badge-finger-no\">Lepas</span>') + `</td>\n    </tr>`;\n});\n\nlet tableHtml = `\n<table class=\"history-tbl\">\n  <thead>\n    <tr>\n      <th>Waktu</th>\n      <th>ID Sesi</th>\n      <th>Pasien</th>\n      <th>Heart Rate</th>\n      <th>SpO2</th>\n      <th>Sensor Jari</th>\n    </tr>\n  </thead>\n  <tbody>` + (rowsHtml || '<tr><td colspan=\"6\" style=\"text-align: center; color: #94a3b8;\">Belum ada pengukuran</td></tr>') + `</tbody>\n</table>`;\nlet msgTable = { payload: tableHtml };\n\nreturn [msgHr, msgSpo2, msgStatus, msgChartHr, msgChartSpo2, msgTable];\n",
+    "outputs": 6,
+    "noerr": 0,
+    "x": 620,
+    "y": 380,
+    "wires": [
+      [
+        "ui_gauge_hr"
+      ],
+      [
+        "ui_gauge_spo2"
+      ],
+      [
+        "ui_tpl_device_status"
+      ],
+      [
+        "ui_chart_vitals"
+      ],
+      [
+        "ui_chart_vitals"
+      ],
+      [
+        "ui_tpl_history"
+      ]
+    ]
+  },
+  {
+    "id": "fn_handle_device_status",
+    "type": "function",
+    "z": "tab_health_dashboard",
+    "name": "Format Status Perangkat",
+    "func": "let s = msg.payload;\nif (typeof s === 'string') {\n    try { s = JSON.parse(s); } catch(e) { s = { detail: s }; }\n}\nmsg.payload = {\n    status: s.status || 'online',\n    detail: s.detail || 'Sensor siap',\n    device_id: s.device_id || 'device01',\n    time: new Date().toLocaleTimeString('id-ID')\n};\nreturn msg;\n",
+    "outputs": 1,
+    "noerr": 0,
+    "x": 450,
+    "y": 440,
+    "wires": [
+      [
+        "ui_tpl_device_status"
+      ]
+    ]
+  },
+  {
+    "id": "ui_gauge_hr",
+    "type": "ui_gauge",
+    "z": "tab_health_dashboard",
+    "name": "Gauge Heart Rate",
+    "group": "ui_grp_vitals_gauges",
+    "order": 1,
+    "width": 3,
+    "height": 4,
+    "gtype": "gage",
+    "title": "Heart Rate",
+    "label": "BPM",
+    "format": "{{value}}",
+    "min": 40,
+    "max": 180,
+    "colors": [
+      "#10b981",
+      "#f59e0b",
+      "#ef4444"
+    ],
+    "seg1": "60",
+    "seg2": "100",
+    "x": 930,
+    "y": 320,
+    "wires": []
+  },
+  {
+    "id": "ui_gauge_spo2",
+    "type": "ui_gauge",
+    "z": "tab_health_dashboard",
+    "name": "Gauge SpO2",
+    "group": "ui_grp_vitals_gauges",
+    "order": 2,
+    "width": 3,
+    "height": 4,
+    "gtype": "gage",
+    "title": "Saturasi Oksigen",
+    "label": "%",
+    "format": "{{value}}",
+    "min": 80,
+    "max": 100,
+    "colors": [
+      "#ef4444",
+      "#f59e0b",
+      "#10b981"
+    ],
+    "seg1": "90",
+    "seg2": "95",
+    "x": 930,
+    "y": 360,
+    "wires": []
+  },
+  {
+    "id": "ui_tpl_device_status",
+    "type": "ui_template",
+    "z": "tab_health_dashboard",
+    "group": "ui_grp_device_status",
+    "name": "Template Status Perangkat",
+    "order": 1,
+    "width": 6,
+    "height": 3,
+    "format": "<div class=\"kpi-box\">\n  <div>\n    <div style=\"font-size: 0.78rem; text-transform: uppercase; color: #94a3b8; font-weight: 600;\">Hardware ESP32</div>\n    <div style=\"font-size: 1.15rem; font-weight: bold; margin-top: 4px; color: #22d3ee;\">\n      {{msg.payload.device_id || 'device01'}}\n    </div>\n    <div style=\"font-size: 0.8rem; color: #cbd5e1; margin-top: 2px;\">\n      Status: <b>{{msg.payload.detail || msg.payload.status || 'Terhubung'}}</b>\n    </div>\n  </div>\n  <div style=\"text-align: right;\">\n    <div style=\"font-size: 0.78rem; color: #94a3b8; margin-bottom: 4px;\">Sensor Jari:</div>\n    <span ng-if=\"msg.payload.finger_detected\" class=\"badge-finger-yes\">JARI TERPASANG</span>\n    <span ng-if=\"!msg.payload.finger_detected\" class=\"badge-finger-no\">JARI BELUM TERDETEKSI</span>\n  </div>\n</div>",
+    "storeOutMessages": true,
+    "fwdInMessages": true,
+    "resendOnRefresh": true,
+    "templateScope": "local",
+    "x": 950,
+    "y": 400,
+    "wires": [
+      []
+    ]
+  },
+  {
+    "id": "ui_chart_vitals",
+    "type": "ui_chart",
+    "z": "tab_health_dashboard",
+    "name": "Grafik Tren Vitals",
+    "group": "ui_grp_vitals_charts",
+    "order": 1,
+    "width": 6,
+    "height": 5,
+    "label": "Tren Denyut Nadi (BPM) & SpO2 (%)",
+    "chartType": "line",
+    "legend": "true",
+    "xformat": "HH:mm:ss",
+    "interpolate": "linear",
+    "nodata": "Menunggu pembacaan sensor...",
+    "dot": false,
+    "ymin": "50",
+    "ymax": "150",
+    "removeOlder": "5",
+    "removeOlderPoints": "",
+    "removeOlderUnit": "60",
+    "cutout": 0,
+    "useOneColor": false,
+    "useUTC": false,
+    "colors": [
+      "#22d3ee",
+      "#10b981",
+      "#ef4444"
+    ],
+    "x": 940,
+    "y": 450,
+    "wires": [
+      [],
+      []
+    ]
+  },
+  {
+    "id": "ui_tpl_history",
+    "type": "ui_template",
+    "z": "tab_health_dashboard",
+    "group": "ui_grp_history_table",
+    "name": "Tabel Riwayat Vitals",
+    "order": 1,
+    "width": 12,
+    "height": 6,
+    "format": "<div ng-bind-html=\"msg.payload\"></div>",
+    "storeOutMessages": true,
+    "fwdInMessages": true,
+    "resendOnRefresh": true,
+    "templateScope": "local",
+    "x": 940,
+    "y": 500,
+    "wires": [
+      []
+    ]
+  },
+  {
+    "id": "fn_update_device_card",
+    "type": "function",
+    "z": "tab_health_dashboard",
+    "name": "Sinkronisasi Status Sesi ke Device Card",
+    "func": "msg.payload = {\n    device_id: 'device01',\n    status: msg.payload.active ? 'Sesi Aktif' : 'Menunggu Sesi',\n    detail: msg.payload.message,\n    finger_detected: false\n};\nreturn msg;",
+    "outputs": 1,
+    "noerr": 0,
+    "x": 730,
+    "y": 320,
+    "wires": [
+      [
+        "ui_tpl_device_status"
+      ]
+    ]
+  }
+]
