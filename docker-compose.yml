@@ -7,7 +7,7 @@ services:
     ports:
       - "1883:1883"
     volumes:
-      - ./mosquitto/config:/mosquitto/config:ro
+      - mosquitto_config:/mosquitto/config
       - mosquitto_data:/mosquitto/data
       - mosquitto_log:/mosquitto/log
     networks:
@@ -72,6 +72,7 @@ networks:
     driver: bridge
 
 volumes:
+  mosquitto_config:
   mosquitto_data:
   mosquitto_log:
   db_data:
